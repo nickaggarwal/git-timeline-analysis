@@ -1,0 +1,32 @@
+# Systemd service file for Codebase Time Machine API
+# Copy this file to /etc/systemd/system/ on Linux systems for production deployment
+
+[Unit]
+Description=Codebase Time Machine API Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/path/to/your/codebase-time-machine/backend
+Environment=PATH=/path/to/your/codebase-time-machine/backend/venv/bin
+EnvironmentFile=/path/to/your/codebase-time-machine/.env
+ExecStart=/path/to/your/codebase-time-machine/backend/venv/bin/gunicorn --config gunicorn.conf.py src.main:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=codebase-time-machine-api
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/path/to/your/codebase-time-machine/backend/logs
+
+[Install]
+WantedBy=multi-user.target

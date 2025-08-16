@@ -86,15 +86,15 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
       properties: {
         ...node.properties,
         caption: node.type === 'commit' 
-          ? `${node.properties.sha?.slice(0, 8)}\n${node.properties.message?.slice(0, 30)}...`
+          ? `${node.properties.sha?.slice(0, 8)}\n${node.properties.author_name}\n${node.properties.message?.slice(0, 25)}...\n+${node.properties.insertions || 0}/-${node.properties.deletions || 0}`
           : node.type === 'developer'
-          ? `${node.properties.name || node.properties.email?.split('@')[0]}\n${node.properties.total_commits || 0} commits`
+          ? `${node.properties.name || node.properties.email?.split('@')[0]}\n${node.properties.total_commits || 0} commits\nScore: ${node.properties.contribution_score || 0}`
           : node.type === 'business_milestone'
-          ? `${node.properties.name}\n${node.properties.milestone_type || 'Milestone'}`
+          ? `${node.properties.name}\n${node.properties.milestone_type || 'Milestone'}\n${node.properties.version ? `v${node.properties.version}` : ''}`
           : node.type === 'file'
-          ? `${node.properties.name?.split('/').pop() || node.properties.path?.split('/').pop() || node.id}`
+          ? `${node.properties.name?.split('/').pop() || node.properties.path?.split('/').pop() || node.id}\n${node.properties.extension || ''}\n${node.properties.total_commits || 0} changes`
           : node.type === 'branch'
-          ? `${node.properties.name || node.id}`
+          ? `${node.properties.name || node.id}${node.properties.is_main ? '\n(Main)' : ''}`
           : node.id
       },
       style: {
@@ -110,10 +110,11 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
                        node.type === 'branch' ? '#7C3AED' : '#4B5563',
         'text-color-internal': '#FFFFFF',
         'font-size': '12px',
-        radius: node.type === 'business_milestone' ? 25 : 
-               node.type === 'developer' ? 20 :
-               node.type === 'commit' ? 15 :
-               node.type === 'file' ? 12 : 15
+        radius: node.type === 'business_milestone' ? 30 : 
+               node.type === 'developer' ? Math.min(30, 15 + (node.properties.total_commits || 0) * 2) :
+               node.type === 'commit' ? Math.min(25, 12 + ((node.properties.insertions || 0) + (node.properties.deletions || 0)) / 50) :
+               node.type === 'file' ? Math.min(20, 10 + (node.properties.total_commits || 0) * 1.5) :
+               node.type === 'branch' ? (node.properties.is_main ? 20 : 15) : 15
       }
     }))
 

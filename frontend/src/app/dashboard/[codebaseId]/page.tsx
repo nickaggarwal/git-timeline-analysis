@@ -11,18 +11,24 @@ import {
   Activity,
   CheckCircle,
   Loader,
-  AlertCircle
+  AlertCircle,
+  BarChart3,
+  Brain
 } from "lucide-react";
 import { DeveloperScorecard } from "@/components/dashboard/DeveloperScorecard";
 import { TimelineView } from "@/components/dashboard/TimelineView";
 import { GraphView } from "@/components/dashboard/GraphView";
+import { BusinessTimelineView } from "@/components/dashboard/BusinessTimelineView";
+import { AISummaryView } from "@/components/dashboard/AISummaryView";
 
 // Tabs for dashboard navigation
 const tabs = [
+  { id: "summary", name: "AI Summary", icon: Brain },
   { id: "chat", name: "Chat", icon: MessageSquare },
-  { id: "graph", name: "Graph", icon: GitBranch },
   { id: "timeline", name: "Timeline", icon: Clock },
+  { id: "business", name: "Business", icon: BarChart3 },
   { id: "developers", name: "Developers", icon: Users },
+  { id: "graph", name: "Graph", icon: GitBranch },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -33,7 +39,7 @@ export default function Dashboard() {
   const codebaseId = params.codebaseId as string;
   const jobId = searchParams.get("jobId");
   
-  const [activeTab, setActiveTab] = useState<TabId>("chat");
+  const [activeTab, setActiveTab] = useState<TabId>("summary");
   const [analysisComplete, setAnalysisComplete] = useState(false);
 
   // Poll for analysis status if we have a job ID
@@ -184,9 +190,11 @@ export default function Dashboard() {
 
         {/* Tab Content */}
         <div className="p-6">
+          {activeTab === "summary" && <SummaryTab codebaseId={codebaseId} />}
           {activeTab === "chat" && <ChatTab codebaseId={codebaseId} />}
           {activeTab === "graph" && <GraphTab codebaseId={codebaseId} />}
           {activeTab === "timeline" && <TimelineTab codebaseId={codebaseId} />}
+          {activeTab === "business" && <BusinessTab codebaseId={codebaseId} />}
           {activeTab === "developers" && <DevelopersTab codebaseId={codebaseId} />}
         </div>
       </div>
@@ -380,4 +388,12 @@ function DevelopersTab({ codebaseId }: { codebaseId: string }) {
   }
 
   return <DeveloperScorecard developers={developersData.developers} codebaseId={codebaseId} />;
+}
+
+function BusinessTab({ codebaseId }: { codebaseId: string }) {
+  return <BusinessTimelineView codebaseId={codebaseId} />;
+}
+
+function SummaryTab({ codebaseId }: { codebaseId: string }) {
+  return <AISummaryView codebaseId={codebaseId} />;
 }

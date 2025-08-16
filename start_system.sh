@@ -16,11 +16,10 @@ fi
 
 echo "✅ Neo4j connection OK"
 
-# Start backend
-echo "🚀 Starting FastAPI backend server..."
+# Start backend with Gunicorn
+echo "🚀 Starting FastAPI backend server with Gunicorn..."
 cd backend
-source venv/bin/activate
-python run_server.py &
+./start_gunicorn.sh &
 BACKEND_PID=$!
 cd ..
 
