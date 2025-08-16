@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
-import { GitCommit, User, GitBranch, Filter, Download, RefreshCw, Info } from 'lucide-react'
+import { GitCommit, User, GitBranch, Filter, Download, RefreshCw, Info, Calendar, FileText, Target } from 'lucide-react'
 
 // Dynamically import Neo4j NVL to avoid SSR issues
 const InteractiveNvlWrapper = dynamic(
@@ -38,7 +38,13 @@ interface GraphViewProps {
 
 export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
-  const [filterType, setFilterType] = useState<'all' | 'commit' | 'developer'>('all')
+  const [filters, setFilters] = useState({
+    businessProgress: true,
+    developers: true, 
+    commits: true,
+    files: true,
+    branches: true
+  })
   const [searchTerm, setSearchTerm] = useState('')
 
   // Transform data for Neo4j NVL
@@ -46,14 +52,20 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
     let filteredNodes = nodes
     let filteredRelationships = relationships
 
-    // Apply filters
-    if (filterType !== 'all') {
-      filteredNodes = nodes.filter(node => node.type === filterType)
-      const filteredNodeIds = new Set(filteredNodes.map(node => node.id))
-      filteredRelationships = relationships.filter(rel => 
-        filteredNodeIds.has(rel.source) && filteredNodeIds.has(rel.target)
-      )
-    }
+    // Apply type-based filters
+    filteredNodes = nodes.filter(node => {
+      if (node.type === 'commit' && !filters.commits) return false
+      if (node.type === 'developer' && !filters.developers) return false
+      if (node.type === 'file' && !filters.files) return false
+      if (node.type === 'branch' && !filters.branches) return false
+      if (node.type === 'business_milestone' && !filters.businessProgress) return false
+      return true
+    })
+    
+    const filteredNodeIds = new Set(filteredNodes.map(node => node.id))
+    filteredRelationships = relationships.filter(rel => 
+      filteredNodeIds.has(rel.source) && filteredNodeIds.has(rel.target)
+    )
 
     if (searchTerm) {
       filteredNodes = filteredNodes.filter(node => 
@@ -77,13 +89,31 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
           ? `${node.properties.sha?.slice(0, 8)}\n${node.properties.message?.slice(0, 30)}...`
           : node.type === 'developer'
           ? `${node.properties.name || node.properties.email?.split('@')[0]}\n${node.properties.total_commits || 0} commits`
+          : node.type === 'business_milestone'
+          ? `${node.properties.name}\n${node.properties.milestone_type || 'Milestone'}`
+          : node.type === 'file'
+          ? `${node.properties.name?.split('/').pop() || node.properties.path?.split('/').pop() || node.id}`
+          : node.type === 'branch'
+          ? `${node.properties.name || node.id}`
           : node.id
       },
       style: {
-        color: node.type === 'commit' ? '#3B82F6' : node.type === 'developer' ? '#10B981' : '#6B7280',
-        'border-color': node.type === 'commit' ? '#1E40AF' : node.type === 'developer' ? '#059669' : '#4B5563',
+        color: node.type === 'commit' ? '#3B82F6' : 
+               node.type === 'developer' ? '#10B981' : 
+               node.type === 'business_milestone' ? '#EF4444' :
+               node.type === 'file' ? '#F59E0B' :
+               node.type === 'branch' ? '#8B5CF6' : '#6B7280',
+        'border-color': node.type === 'commit' ? '#1E40AF' : 
+                       node.type === 'developer' ? '#059669' : 
+                       node.type === 'business_milestone' ? '#DC2626' :
+                       node.type === 'file' ? '#D97706' :
+                       node.type === 'branch' ? '#7C3AED' : '#4B5563',
         'text-color-internal': '#FFFFFF',
-        'font-size': '12px'
+        'font-size': '12px',
+        radius: node.type === 'business_milestone' ? 25 : 
+               node.type === 'developer' ? 20 :
+               node.type === 'commit' ? 15 :
+               node.type === 'file' ? 12 : 15
       }
     }))
 
@@ -107,7 +137,7 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
       nodes: nvlNodes,
       relationships: nvlRelationships
     }
-  }, [nodes, relationships, filterType, searchTerm])
+  }, [nodes, relationships, filters, searchTerm])
 
   // Neo4j NVL Options
   const nvlOptions = {
@@ -137,6 +167,9 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
     switch (type) {
       case 'commit': return GitCommit
       case 'developer': return User
+      case 'business_milestone': return Target
+      case 'file': return FileText
+      case 'branch': return GitBranch
       default: return GitBranch
     }
   }
@@ -170,18 +203,65 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
           
           {/* Controls */}
           <div className="flex flex-wrap items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value as any)}
-                className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Nodes</option>
-                <option value="commit">Commits Only</option>
-                <option value="developer">Developers Only</option>
-              </select>
-            </div>
+            <button
+              onClick={() => setFilters(prev => ({...prev, businessProgress: !prev.businessProgress}))}
+              className={`flex items-center space-x-2 px-3 py-1 rounded-lg text-sm transition-colors ${
+                filters.businessProgress 
+                  ? 'bg-red-100 text-red-700 border border-red-300' 
+                  : 'bg-gray-100 text-gray-500 border border-gray-300'
+              }`}
+            >
+              <Target className="w-4 h-4" />
+              <span>Business Progress</span>
+            </button>
+            
+            <button
+              onClick={() => setFilters(prev => ({...prev, developers: !prev.developers}))}
+              className={`flex items-center space-x-2 px-3 py-1 rounded-lg text-sm transition-colors ${
+                filters.developers 
+                  ? 'bg-green-100 text-green-700 border border-green-300' 
+                  : 'bg-gray-100 text-gray-500 border border-gray-300'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              <span>Developers</span>
+            </button>
+            
+            <button
+              onClick={() => setFilters(prev => ({...prev, commits: !prev.commits}))}
+              className={`flex items-center space-x-2 px-3 py-1 rounded-lg text-sm transition-colors ${
+                filters.commits 
+                  ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                  : 'bg-gray-100 text-gray-500 border border-gray-300'
+              }`}
+            >
+              <GitCommit className="w-4 h-4" />
+              <span>Commits</span>
+            </button>
+
+            <button
+              onClick={() => setFilters(prev => ({...prev, files: !prev.files}))}
+              className={`flex items-center space-x-2 px-3 py-1 rounded-lg text-sm transition-colors ${
+                filters.files 
+                  ? 'bg-amber-100 text-amber-700 border border-amber-300' 
+                  : 'bg-gray-100 text-gray-500 border border-gray-300'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Files</span>
+            </button>
+
+            <button
+              onClick={() => setFilters(prev => ({...prev, branches: !prev.branches}))}
+              className={`flex items-center space-x-2 px-3 py-1 rounded-lg text-sm transition-colors ${
+                filters.branches 
+                  ? 'bg-purple-100 text-purple-700 border border-purple-300' 
+                  : 'bg-gray-100 text-gray-500 border border-gray-300'
+              }`}
+            >
+              <GitBranch className="w-4 h-4" />
+              <span>Branches</span>
+            </button>
             
             <input
               type="text"
@@ -251,7 +331,10 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
                 <div className="flex items-center space-x-2">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                     selectedNode.type === 'commit' ? 'bg-blue-500' : 
-                    selectedNode.type === 'developer' ? 'bg-green-500' : 'bg-gray-500'
+                    selectedNode.type === 'developer' ? 'bg-green-500' : 
+                    selectedNode.type === 'business_milestone' ? 'bg-red-500' :
+                    selectedNode.type === 'file' ? 'bg-amber-500' :
+                    selectedNode.type === 'branch' ? 'bg-purple-500' : 'bg-gray-500'
                   }`}>
                     {(() => {
                       const NodeIcon = getNodeIcon(selectedNode.type)
@@ -338,6 +421,79 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
                     )}
                   </>
                 )}
+
+                {selectedNode.type === 'business_milestone' && (
+                  <>
+                    <div>
+                      <label className="font-medium text-gray-700">Name:</label>
+                      <p className="text-gray-600">{selectedNode.properties.name}</p>
+                    </div>
+                    <div>
+                      <label className="font-medium text-gray-700">Type:</label>
+                      <p className="text-gray-600">{selectedNode.properties.milestone_type || 'Milestone'}</p>
+                    </div>
+                    <div>
+                      <label className="font-medium text-gray-700">Description:</label>
+                      <p className="text-gray-600">{selectedNode.properties.description || 'No description'}</p>
+                    </div>
+                    <div>
+                      <label className="font-medium text-gray-700">Date:</label>
+                      <p className="text-gray-600">
+                        {selectedNode.properties.date 
+                          ? new Date(selectedNode.properties.date).toLocaleDateString()
+                          : 'Unknown'
+                        }
+                      </p>
+                    </div>
+                    {selectedNode.properties.version && (
+                      <div>
+                        <label className="font-medium text-gray-700">Version:</label>
+                        <p className="text-gray-600">{selectedNode.properties.version}</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {selectedNode.type === 'file' && (
+                  <>
+                    <div>
+                      <label className="font-medium text-gray-700">Name:</label>
+                      <p className="text-gray-600">{selectedNode.properties.name || selectedNode.properties.path}</p>
+                    </div>
+                    <div>
+                      <label className="font-medium text-gray-700">Path:</label>
+                      <p className="text-gray-600 break-words">{selectedNode.properties.path}</p>
+                    </div>
+                    {selectedNode.properties.extension && (
+                      <div>
+                        <label className="font-medium text-gray-700">Extension:</label>
+                        <p className="text-gray-600">{selectedNode.properties.extension}</p>
+                      </div>
+                    )}
+                    {selectedNode.properties.total_commits && (
+                      <div>
+                        <label className="font-medium text-gray-700">Modifications:</label>
+                        <p className="text-gray-600">{selectedNode.properties.total_commits} times</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {selectedNode.type === 'branch' && (
+                  <>
+                    <div>
+                      <label className="font-medium text-gray-700">Name:</label>
+                      <p className="text-gray-600">{selectedNode.properties.name}</p>
+                    </div>
+                    {selectedNode.properties.is_main && (
+                      <div>
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                          Main Branch
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
               
               {/* Connected nodes */}
@@ -354,7 +510,10 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
                         <div key={i} className="flex items-center space-x-2 text-xs">
                           <div className={`w-2 h-2 rounded-full ${
                             connectedNode?.type === 'commit' ? 'bg-blue-500' : 
-                            connectedNode?.type === 'developer' ? 'bg-green-500' : 'bg-gray-500'
+                            connectedNode?.type === 'developer' ? 'bg-green-500' : 
+                            connectedNode?.type === 'business_milestone' ? 'bg-red-500' :
+                            connectedNode?.type === 'file' ? 'bg-amber-500' :
+                            connectedNode?.type === 'branch' ? 'bg-purple-500' : 'bg-gray-500'
                           }`}></div>
                           <span className="text-gray-600">{rel.type}</span>
                           <span className="text-gray-800">{connectedId.slice(0, 20)}...</span>
@@ -368,7 +527,7 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
         </div>
 
         {/* Legend */}
-        <div className="mt-6 flex items-center justify-center space-x-6 text-sm">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm">
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
             <span className="text-gray-600">Commits</span>
@@ -376,6 +535,18 @@ export function GraphView({ nodes, relationships, stats }: GraphViewProps) {
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-green-500 rounded-full"></div>
             <span className="text-gray-600">Developers</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+            <span className="text-gray-600">Business Milestones</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-amber-500 rounded-full"></div>
+            <span className="text-gray-600">Files</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
+            <span className="text-gray-600">Branches</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-8 h-0.5 bg-blue-500"></div>

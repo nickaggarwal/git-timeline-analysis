@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { DeveloperScorecard } from "@/components/dashboard/DeveloperScorecard";
 import { TimelineView } from "@/components/dashboard/TimelineView";
+import { GraphView } from "@/components/dashboard/GraphView";
 
 // Tabs for dashboard navigation
 const tabs = [
@@ -213,12 +214,18 @@ function ChatTab({ codebaseId }: { codebaseId: string }) {
       const response = await fetch(`http://localhost:8001/codebase/${codebaseId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codebase_id: codebaseId, question: message }),
+        body: JSON.stringify({ 
+          message: message,
+          conversation_history: conversation.map(msg => ({
+            role: msg.type === "user" ? "user" : "assistant",
+            content: msg.content
+          }))
+        }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        setConversation(prev => [...prev, { type: "assistant", content: result.answer }]);
+        setConversation(prev => [...prev, { type: "assistant", content: result.response || result.answer || "No response received" }]);
       }
     } catch (error) {
       setConversation(prev => [...prev, { 
@@ -274,12 +281,40 @@ function ChatTab({ codebaseId }: { codebaseId: string }) {
 }
 
 function GraphTab({ codebaseId }: { codebaseId: string }) {
+  const { data: graphData, isLoading } = useQuery({
+    queryKey: ["graph", codebaseId],
+    queryFn: async () => {
+      const response = await fetch(`http://localhost:8001/codebase/${codebaseId}/graph`);
+      if (!response.ok) throw new Error("Failed to fetch graph data");
+      return response.json();
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-12">
+        <Loader className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-4" />
+        <p className="text-gray-500">Loading graph data...</p>
+      </div>
+    );
+  }
+
+  if (!graphData) {
+    return (
+      <div className="text-center py-12">
+        <GitBranch className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-700 mb-2">Graph Visualization</h3>
+        <p className="text-gray-500">No graph data available</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="text-center py-12">
-      <GitBranch className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-      <h3 className="text-lg font-semibold text-gray-700 mb-2">Graph Visualization</h3>
-      <p className="text-gray-500">Interactive Neo4j graph visualization coming soon!</p>
-    </div>
+    <GraphView
+      nodes={graphData.nodes || []}
+      relationships={graphData.relationships || []}
+      stats={graphData.stats || { total_nodes: 0, total_relationships: 0 }}
+    />
   );
 }
 
